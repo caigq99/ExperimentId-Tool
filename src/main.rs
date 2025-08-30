@@ -58,7 +58,7 @@ fn main() {
     // 若未提供，则生成一个新的 v4
     let new_id = chosen.unwrap_or_else(Uuid::new_v4);
 
-    // 写入新值
+    // 写入新的 ExperimentId
     let write_status = Command::new("defaults")
         .args([
             "write",
@@ -71,13 +71,32 @@ fn main() {
         .expect("无法启动 defaults 命令，请确认在 macOS 上运行");
 
     if !write_status.success() {
-        eprintln!("❌ 写入失败。");
+        eprintln!("❌ ExperimentId 写入失败。");
         std::process::exit(write_status.code().unwrap_or(1));
     }
 
     println!("✅ 新的 ExperimentId 已写入: {}", new_id);
 
-    // 再次回读确认
+    // 同时重置 DidNonAnonymousUserLogIn 为 false
+    let reset_status = Command::new("defaults")
+        .args([
+            "write",
+            &domain,
+            "DidNonAnonymousUserLogIn",
+            "-bool",
+            "false",
+        ])
+        .status()
+        .expect("无法启动 defaults 命令，请确认在 macOS 上运行");
+
+    if !reset_status.success() {
+        eprintln!("❌ DidNonAnonymousUserLogIn 重置失败。");
+        std::process::exit(reset_status.code().unwrap_or(1));
+    }
+
+    println!("✅ DidNonAnonymousUserLogIn 已重置为 false");
+
+    // 再次回读确认 ExperimentId
     let output = Command::new("defaults")
         .args(["read", &domain, "ExperimentId"])
         .output()
@@ -86,5 +105,16 @@ fn main() {
     if output.status.success() {
         let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
         println!("📌 回读确认 ExperimentId: {}", val);
+    }
+
+    // 回读确认 DidNonAnonymousUserLogIn
+    let login_output = Command::new("defaults")
+        .args(["read", &domain, "DidNonAnonymousUserLogIn"])
+        .output()
+        .expect("读取失败：无法启动 defaults");
+
+    if login_output.status.success() {
+        let login_val = String::from_utf8_lossy(&login_output.stdout).trim().to_string();
+        println!("📌 回读确认 DidNonAnonymousUserLogIn: {}", login_val);
     }
 }

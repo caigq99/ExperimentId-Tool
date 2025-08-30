@@ -6,6 +6,7 @@
 
 - 🔧 读取和设置 macOS 应用程序的 ExperimentId
 - 🆔 自动生成 UUID v4 格式的实验 ID
+- 🔄 同时重置 DidNonAnonymousUserLogIn 字段为 false
 - 🎯 支持自定义域名和 ID
 - ✅ 写入后自动验证确认
 - 🖥️ 专为 macOS 系统设计
@@ -81,7 +82,9 @@ cargo build --release
 - 🔎 **旧的 ExperimentId**: 显示当前存储的实验 ID（如果存在）
 - ⚠️ **未找到旧的 ExperimentId**: 首次设置时的提示
 - ✅ **新的 ExperimentId 已写入**: 确认新 ID 已成功写入
+- ✅ **DidNonAnonymousUserLogIn 已重置为 false**: 确认登录状态已重置
 - 📌 **回读确认 ExperimentId**: 验证写入的 ID
+- 📌 **回读确认 DidNonAnonymousUserLogIn**: 验证登录状态重置
 
 ## 技术细节
 
@@ -97,7 +100,8 @@ cargo build --release
 1. 使用 `defaults read` 读取当前的 ExperimentId
 2. 生成新的 UUID v4 或使用用户指定的 UUID
 3. 使用 `defaults write` 写入新的 ExperimentId
-4. 再次读取以确认写入成功
+4. 同时使用 `defaults write` 将 DidNonAnonymousUserLogIn 重置为 false
+5. 再次读取两个字段以确认写入成功
 
 ### 错误处理
 
