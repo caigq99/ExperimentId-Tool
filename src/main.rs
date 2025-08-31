@@ -18,7 +18,13 @@ fn main() {
         args.drain(i..=i + 1);
     }
 
-    // 读取旧值
+    // 解析 --no-reset-login 选项
+    let reset_login = !args.iter().any(|a| a == "--no-reset-login");
+    if let Some(i) = args.iter().position(|a| a == "--no-reset-login") {
+        args.remove(i);
+    }
+
+    // 读取旧的 ExperimentId
     let old_val = Command::new("defaults")
         .args(["read", &domain, "ExperimentId"])
         .output()
@@ -35,6 +41,25 @@ fn main() {
         println!("🔎 旧的 ExperimentId: {}", v);
     } else {
         println!("⚠️ 未找到旧的 ExperimentId，可能是首次写入。");
+    }
+
+    // 读取当前的 DidNonAnonymousUserLogIn 状态
+    let old_login_val = Command::new("defaults")
+        .args(["read", &domain, "DidNonAnonymousUserLogIn"])
+        .output()
+        .ok()
+        .and_then(|out| {
+            if out.status.success() {
+                Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
+
+    if let Some(v) = &old_login_val {
+        println!("🔎 当前的 DidNonAnonymousUserLogIn: {}", v);
+    } else {
+        println!("⚠️ 未找到 DidNonAnonymousUserLogIn 字段。");
     }
 
     // 解析 --id
@@ -77,24 +102,28 @@ fn main() {
 
     println!("✅ 新的 ExperimentId 已写入: {}", new_id);
 
-    // 同时重置 DidNonAnonymousUserLogIn 为 false
-    let reset_status = Command::new("defaults")
-        .args([
-            "write",
-            &domain,
-            "DidNonAnonymousUserLogIn",
-            "-bool",
-            "false",
-        ])
-        .status()
-        .expect("无法启动 defaults 命令，请确认在 macOS 上运行");
+    // 根据选项决定是否重置 DidNonAnonymousUserLogIn
+    if reset_login {
+        let reset_status = Command::new("defaults")
+            .args([
+                "write",
+                &domain,
+                "DidNonAnonymousUserLogIn",
+                "false",
+            ])
+            .status()
+            .expect("无法启动 defaults 命令，请确认在 macOS 上运行");
 
-    if !reset_status.success() {
-        eprintln!("❌ DidNonAnonymousUserLogIn 重置失败。");
-        std::process::exit(reset_status.code().unwrap_or(1));
+        if !reset_status.success() {
+            eprintln!("❌ DidNonAnonymousUserLogIn 重置失败。");
+            std::process::exit(reset_status.code().unwrap_or(1));
+        }
+
+        println!("✅ DidNonAnonymousUserLogIn 已重置为 false");
+        println!("⚠️ 注意：应用程序启动时可能会根据实际登录状态重新设置此字段");
+    } else {
+        println!("ℹ️ 跳过 DidNonAnonymousUserLogIn 重置（使用了 --no-reset-login 选项）");
     }
-
-    println!("✅ DidNonAnonymousUserLogIn 已重置为 false");
 
     // 再次回读确认 ExperimentId
     let output = Command::new("defaults")
@@ -107,14 +136,16 @@ fn main() {
         println!("📌 回读确认 ExperimentId: {}", val);
     }
 
-    // 回读确认 DidNonAnonymousUserLogIn
-    let login_output = Command::new("defaults")
-        .args(["read", &domain, "DidNonAnonymousUserLogIn"])
-        .output()
-        .expect("读取失败：无法启动 defaults");
+    // 只在重置了登录状态时才回读确认
+    if reset_login {
+        let login_output = Command::new("defaults")
+            .args(["read", &domain, "DidNonAnonymousUserLogIn"])
+            .output()
+            .expect("读取失败：无法启动 defaults");
 
-    if login_output.status.success() {
-        let login_val = String::from_utf8_lossy(&login_output.stdout).trim().to_string();
-        println!("📌 回读确认 DidNonAnonymousUserLogIn: {}", login_val);
+        if login_output.status.success() {
+            let login_val = String::from_utf8_lossy(&login_output.stdout).trim().to_string();
+            println!("📌 回读确认 DidNonAnonymousUserLogIn: {}", login_val);
+        }
     }
 }
